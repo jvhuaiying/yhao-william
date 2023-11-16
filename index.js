@@ -1,23 +1,41 @@
+const path = require("path");
+const jsdom = require("jsdom");
 const express = require("express");
 const app = express();
-const http = require("http").Server(app);
-const io = require("socket.io")(http);
-const port = 3000;
-app.use(express.static(__dirname + '/public'));
-io.on("connection", (socket) => {
-  const room = "gameRoom";
-  socket.join(room);
-  socket.on("chat message", (msg) => {
-    socket.broadcast.emit("chat message", msg);
-  });
-  socket.on("disconnect", () => {
-    socket.leave(room);
-  });
-});
+const server = require("http").Server(app);
+const io = require("socket.io").listen(server);
+const { JSDOM } = jsdom;
+const Datauri = require("datauri");
+const datauri = new Datauri();
+app.use(express.static(__dirname + "/public"));
 app.get("/", (req, res) => {
-  res.sendFile(__dirname + '/index.html');
+  res.sendFile(__dirname + "/index.html");
 });
-
-app.listen(port, () => {
-  console.log(`Example app listening on port http://127.0.0.1:${port}`);
-});
+setupAuthoritativePhaser = () => {
+  JSDOM.fromFile(path.join(__dirname, "authoritative_server/index.html"), {
+    runScripts: "dangerously",
+    resources: "usable",
+    pretendToBeVisual: true,
+  })
+    .then((dom) => {
+      dom.window.URL.createObjectURL = (blob) => {
+        if (blob) {
+          return datauri.format(
+            blob.type,
+            blob[Object.getOwnPropertySymbols(blob)[0]]._buffer
+          ).content;
+        }
+      };
+      dom.window.URL.revokeObjectURL = (objectURL) => {};
+      dom.window.gameLoaded = () => {
+        server.listen(process.env.PORT || 8081, function () {
+          console.log(`Listening on ${server.address().port}`);
+        });
+      };
+      dom.window.io = io;
+    })
+    .catch((error) => {
+      console.log(error.message);
+    });
+};
+setupAuthoritativePhaser();
